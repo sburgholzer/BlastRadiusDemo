@@ -26,46 +26,34 @@ jobs:
 
       - run: npm install
 
+      - name: Generate CloudFormation changeset
+        run: |
+          npx cdk synth --json > template.json
+          CHANGESET_NAME="blast-radius-$(date +%s)"
+          aws cloudformation create-change-set \
+            --stack-name BlastRadiusDemoBaseline \
+            --change-set-name $CHANGESET_NAME \
+            --template-body file://template.json \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --change-set-type UPDATE \
+            --output json
+          aws cloudformation wait change-set-create-complete \
+            --stack-name BlastRadiusDemoBaseline \
+            --change-set-name $CHANGESET_NAME
+          aws cloudformation describe-change-set \
+            --stack-name BlastRadiusDemoBaseline \
+            --change-set-name $CHANGESET_NAME \
+            --output json > changeset.json
+          aws cloudformation delete-change-set \
+            --stack-name BlastRadiusDemoBaseline \
+            --change-set-name $CHANGESET_NAME
+
       - name: Blast Radius Analysis
         uses: sburgholzer/BlastRadius@v0.1.0
         id: blast-radius
         with:
-          format: cdk
-          stack: BlastRadiusDemoBaseline
+          format: cloudformation
+          input: changeset.json
           threshold: 75
           ai-gate: true
           api-url: ${{ secrets.BLAST_RADIUS_API_URL }}
-
-      - name: Comment PR with Results
-        if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const verdict = '${{ steps.blast-radius.outputs.verdict }}' === 'pass' ? '✅ PASS' : '❌ FAIL';
-            const deploy = '${{ steps.blast-radius.outputs.recommend-deploy }}';
-            const confidence = '${{ steps.blast-radius.outputs.confidence }}';
-            const score = '${{ steps.blast-radius.outputs.highest-score }}';
-            const affected = '${{ steps.blast-radius.outputs.total-affected }}';
-            const summary = `${{ steps.blast-radius.outputs.summary }}`;
-
-            const body = [
-              `## 🎯 Blast Radius Analysis — ${verdict}`,
-              '',
-              `| Metric | Value |`,
-              `|--------|-------|`,
-              `| Highest Score | ${score}/100 |`,
-              `| Affected Resources | ${affected} |`,
-              `| AI Recommendation | ${deploy === 'true' ? '✅ Deploy' : '❌ Do Not Deploy'} |`,
-              `| Confidence | ${confidence} |`,
-              '',
-              '---',
-              '',
-              summary || '*No AI summary available.*',
-            ].join('\n');
-
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
