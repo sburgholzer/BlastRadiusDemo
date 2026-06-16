@@ -28,7 +28,8 @@ jobs:
 
       - name: Generate CloudFormation changeset
         run: |
-          npx cdk synth --json > template.json
+          npx cdk synth 2>/dev/null
+          cp cdk.out/BlastRadiusDemoBaseline.template.json template.json
           CHANGESET_NAME="blast-radius-$(date +%s)"
           aws cloudformation create-change-set \
             --stack-name BlastRadiusDemoBaseline \
