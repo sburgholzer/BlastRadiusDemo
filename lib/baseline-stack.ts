@@ -44,7 +44,7 @@ export class BaselineStack extends cdk.Stack {
 
     // Allow HTTP and HTTPS from anywhere (public-facing)
     webSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.anyIpv4('10.0.0.0/8'),
       ec2.Port.tcp(80),
       'Allow HTTP from anywhere'
     );
